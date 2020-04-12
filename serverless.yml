@@ -1,8 +1,13 @@
 service:
   name: users
-# app and org for use with dashboard.serverless.com
-#app: your-app-name
-#org: your-org-name
+  package:
+    exclude:
+      - .history/**
+      - coverage/**
+      - package.json
+      - package-lock.json
+      - "**/*.test.js"
+      - .vscode/**
 
 custom:
   webpack:
@@ -20,11 +25,51 @@ provider:
     minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
   environment:
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    USERS_TABLE: users-table
+  stage: dev
+  region: ap-southeast-2
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+      Resource: "*"
 
 functions:
-  hello:
-    handler: handler.hello
+  userPost:
+    handler: src/handler.createUser
+    memorySize: 128
+    description: Post/Submit user information to save in DB.
     events:
       - http:
+          path: users
+          method: post
+  listUsers:
+    handler: src/handler.listUsers
+    memorySize: 128
+    description: Retrieve all of the users from DB.
+    events:
+      - http:
+          path: users
           method: get
-          path: hello
+
+resources:
+  Resources:
+    UserTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Delete
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: "id"
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: "id"
+            KeyType: "HASH"
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        StreamSpecification:
+          StreamViewType: "NEW_AND_OLD_IMAGES"
+        TableName: ${self:provider.environment.USERS_TABLE}
